@@ -93,12 +93,10 @@ impl Headers {
             value_string.reserve(value.len() + 2);
             value_string.push_str(", ");
             value_string.push_str(value);
-            println!("{key} {value}");
             Ok(())
         } else {
             self.headers
                 .insert(key.trim().to_lowercase(), value.trim().to_string());
-            println!("{key} {value}");
             Ok(())
         }
     }
