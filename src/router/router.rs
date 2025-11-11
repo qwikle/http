@@ -3,7 +3,6 @@ use std::future::Future;
 use std::pin::Pin;
 use tokio::io::{AsyncWriteExt, WriteHalf};
 use tokio::net::TcpStream;
-use tokio::sync::{Mutex, oneshot};
 
 use crate::request::request::Request;
 use crate::response::Response;

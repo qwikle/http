@@ -9,14 +9,29 @@ mod router;
 mod server;
 
 #[tokio::main]
-async fn main() -> std::io::Result<()> {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    tracing_subscriber::fmt::init();
     let mut router = Router::new();
     router.get("/", hello_handler);
     router.get("/hello", by_handler);
-    let server = Server::serve("3333", router).await.unwrap();
+    let mut server = match Server::new(router).await {
+        Ok(server) =>server,
+        Err(e) => {
+            println!("Cannot run server {e}");
+            return Err(e);
+        }
+    };
 
-    server.listen().await;
-    Ok(())
+    match server.start("127.0.0.1:3333").await {
+        Ok(_) => {
+            println!("✅ Serveur arrêté proprement");
+        }
+        Err(e) => {
+            eprintln!("❌ Erreur du serveur: {}", e);
+            std::process::exit(1);
+        }
+    }
+   Ok(())
 }
 
 async fn hello_handler(ctx: Context) -> HandlerResult {

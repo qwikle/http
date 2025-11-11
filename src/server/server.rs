@@ -1,52 +1,138 @@
-use std::sync::Arc;
-
+use std::{net::SocketAddr, sync::{Arc}};
+pub use crate::server::ServerState;
 use tokio::{
-    io::{self},
-    net::TcpListener,
+    io, net::{TcpListener, TcpStream}, sync::Mutex
 };
-use tracing::info;
+use tracing::{error, info, warn};
 
 use crate::{
     request::request_from_reader,
     response::{Response},
-    router::router::Router,
+    router::router::Router, server::lifecycle::LifecycleManager,
 };
 
 pub struct Server {
-    listener: TcpListener,
-    router: Arc<Router>,
+    listener: Option<TcpListener>,
+    lifecycle: LifecycleManager,
+    router: Arc<Mutex<Router>>
 }
-
+    
 impl Server {
-    pub async fn serve(port: &str, router: Router) -> Result<Self, ServerError> {
-        tracing_subscriber::fmt().init();
-        let mut addr = String::from("127.0.0.1:").to_owned();
-        addr.push_str(port);
-        let listener = TcpListener::bind(&addr)
-            .await
-            .map_err(|_| ServerError::PortAlReadyUsed)?;
-        info!("Server running and listening at : {addr}");
-        Ok(Self {
-            listener,
-            router: Arc::new(router),
-        })
+    
+    pub async fn new(router: Router) -> Result<Self, Box<dyn std::error::Error>> {
+        let server = Self {
+          lifecycle: LifecycleManager::new(),
+          router: Arc::new(Mutex::new(router)),
+        listener: None  
+        };
+        
+        server.boot().await?;
+        Ok(server)
+    }
+    
+    async fn boot(&self) -> Result<(), Box<dyn std::error::Error>> {
+        info!("Booting server...");
+        
+        
+        self.lifecycle.transition_to(ServerState::Ready)?;
+        info!("Server booted..");
+        Ok(())
+    }
+    
+    pub async fn start(&mut self, addr: &str) -> Result<(), Box<dyn std::error::Error>> {
+        if self.lifecycle.curent_state() != ServerState::Ready {
+            return Err("Server must be in Ready state.".into());
+        }
+        self.listener =  Some(TcpListener::bind(addr).await?);
+        self.lifecycle.transition_to(ServerState::Run)?;
+        info!("Server is running on {addr}");
+        self.listen().await
     }
 
-    pub async fn listen(&self) {
-        loop {
-            let (socket, _) = self.listener.accept().await.unwrap();
-            let (rd, wr) = io::split(socket);
-            let router = Arc::clone(&self.router);
-            tokio::spawn(async move {
-                if let Ok(r) = request_from_reader(rd).await {
-                let response = Response::new();
-                router.handle_request(r, response, wr).await;
-                    
+     async fn listen(&self)-> Result<(), Box<dyn std::error::Error>> {
+        let listener = self.listener.as_ref().unwrap();
+        
+        while self.lifecycle.curent_state() == ServerState::Run {
+            tokio::select! {
+                accept_result = listener.accept()=> {
+                    match accept_result {
+                        Ok((socket, addr)) => {
+                            self.handle_connection(socket, addr).await;
+                        },
+                        Err(e) => error!("Accept Error: {e}")
+                    }
                 }
-            });
+                _ = self.wait_for_shutdown() => {
+                    break;
+                }
+            }
         }
+        self.shutdown().await
+    }
+    
+    async fn handle_connection(&self, socket: TcpStream, addr: SocketAddr) {
+        if self.lifecycle.curent_state() != ServerState::Run {
+            error!("Connexion rejected - server is shutting down");
+            return;
+        }
+        static CONNECTION_SEMAPHORE: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(10000);
+        
+        let permit = match CONNECTION_SEMAPHORE.acquire().await {
+            Ok(p) =>p,
+            Err(_) => {
+                error!("too many simultaneous connections, {} rejected", addr);
+                return;
+            }  
+        };
+        
+        let router = Arc::clone(&self.router);
+        tokio::spawn(async move{
+            let _permit = permit;
+            
+            match Self::process_connection(socket, router).await {
+                Ok(_) => {
+                info!("Connection ended with success: {}",addr);
+                },
+                Err(e) => {
+                warn!("Erreur on the connection {}: {}",addr, e);  
+                }
+            }
+        });
+    }
+    
+    async fn process_connection( socket: TcpStream, router: Arc<Mutex<Router>>) -> Result<(),Box<dyn std::error::Error>> {
+        let (rd, rw) = io::split(socket);
+        
+        let request = request_from_reader(rd).await.unwrap();
+        let router_guard = router.lock().await;
+        router_guard.handle_request(request, Response::new(), rw).await;
+        Ok(())
+    }
+    
+    async fn shutdown(&self) -> Result<(), Box<dyn std::error::Error>> {
+        self.lifecycle.transition_to(ServerState::Closing)?;
+        self.close_connections().await?;
+        self.cleanup().await?;
+        self.lifecycle.transition_to(ServerState::Shutdown)?;
+        info!("Shutting down completes");
+        Ok(())
+    }
+    
+    async fn wait_for_shutdown(&self) {
+        tokio::signal::ctrl_c().await.expect("Cannot read signal.")
+    }
+    
+    
+    async fn close_connections(&self) -> Result<(), Box<dyn std::error::Error>> {
+        Ok(())
+    }
+    
+    async fn cleanup(&self)-> Result<(), Box<dyn std::error::Error>> {
+        Ok(())
     }
 }
+
+
 
 #[derive(Debug, PartialEq)]
 pub enum ServerError {
