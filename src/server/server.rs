@@ -1,7 +1,7 @@
 use std::{net::SocketAddr, sync::{Arc}};
 pub use crate::server::ServerState;
 use tokio::{
-    io, net::{TcpListener, TcpStream}, sync::Mutex
+    io, net::{TcpListener, TcpStream},
 };
 use tracing::{error, info, warn};
 
@@ -14,7 +14,7 @@ use crate::{
 pub struct Server {
     listener: Option<TcpListener>,
     lifecycle: LifecycleManager,
-    router: Arc<Mutex<Router>>
+    router: Arc<Router>
 }
     
 impl Server {
@@ -22,7 +22,7 @@ impl Server {
     pub async fn new(router: Router) -> Result<Self, Box<dyn std::error::Error>> {
         let server = Self {
           lifecycle: LifecycleManager::new(),
-          router: Arc::new(Mutex::new(router)),
+          router: Arc::new(router),
         listener: None  
         };
         
@@ -100,11 +100,11 @@ impl Server {
         });
     }
     
-    async fn process_connection( socket: TcpStream, router: Arc<Mutex<Router>>) -> Result<(),Box<dyn std::error::Error>> {
+    async fn process_connection( socket: TcpStream, router: Arc<Router>) -> Result<(),Box<dyn std::error::Error>> {
         let (rd, rw) = io::split(socket);
         
         let request = request_from_reader(rd).await.unwrap();
-        let router_guard = router.lock().await;
+        let router_guard = router;
         router_guard.handle_request(request, Response::new(), rw).await;
         Ok(())
     }

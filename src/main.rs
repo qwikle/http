@@ -24,10 +24,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     match server.start("127.0.0.1:3333").await {
         Ok(_) => {
-            println!("✅ Serveur arrêté proprement");
+            println!("Server properly closed");
         }
         Err(e) => {
-            eprintln!("❌ Erreur du serveur: {}", e);
+            eprintln!("Error from the server: {}", e);
             std::process::exit(1);
         }
     }
