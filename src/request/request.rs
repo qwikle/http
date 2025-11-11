@@ -4,12 +4,14 @@ use crate::{headers::headers::Headers, request::body::Body};
 
 const MAX_LINE_LENGTH: usize = 8 * 1024;
 
+#[derive(Clone)]
 pub struct Request {
     pub request_line: RequestLine,
     pub headers: Headers,
     pub body: Option<Body>,
 }
 
+#[derive(Clone)]
 pub struct RequestLine {
     pub http_version: String,
     pub request_target: String,

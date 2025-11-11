@@ -5,6 +5,7 @@ use std::io::Write;
 
 use crate::{headers::Headers, request::Body};
 
+#[derive(Clone)]
 pub struct Response {
     response_line: ResponseLine,
     content: Vec<u8>,
@@ -29,6 +30,11 @@ impl Response {
 
     pub fn set_header(&mut self, key: &str, value: &str) {
         self.headers.set(key, value).unwrap();
+    }
+
+    pub fn status(&mut self, status: Status) -> Self {
+        self.response_line.status = status;
+        self.clone()
     }
 
     pub fn body(&mut self, body: Vec<u8>) {
@@ -104,11 +110,13 @@ impl Response {
     }
 }
 
+#[derive(Clone)]
 pub struct ResponseLine {
     version: Version,
     status: Status,
 }
 
+#[derive(Clone)]
 pub enum Version {
     OneDotOne,
 }
@@ -121,6 +129,7 @@ impl std::fmt::Display for Version {
     }
 }
 
+#[derive(Clone)]
 pub enum Status {
     // 2xx Success
     Ok,

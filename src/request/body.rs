@@ -1,6 +1,6 @@
-use flate2::{Compression, write::GzEncoder};
-use std::io::Write;
 use tokio::io::{AsyncRead, AsyncReadExt, BufReader};
+
+#[derive(Clone)]
 pub struct Body {
     content: Vec<u8>,
 }
@@ -29,7 +29,6 @@ impl Body {
 
         Ok(Body { content })
     }
-
 
     pub fn as_bytes(&self) -> &[u8] {
         &self.content

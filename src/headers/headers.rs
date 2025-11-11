@@ -6,6 +6,8 @@ use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
 
 const MAX_LINE_LENGTH: usize = 8 * 1024;
 const CRLF: &str = "\r\n";
+
+#[derive(Clone)]
 pub struct Headers {
     pub headers: HashMap<String, String>,
 }
